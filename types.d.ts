@@ -639,6 +639,8 @@ type HighsLoaderOptions = Readonly<
   Partial<{
     /** Should return the URL of an asset given its name. Useful for locating the wasm file */
     locateFile(file: string): string;
+    /** set to true to log HiGHS stdout and stderr to console */
+    logToConsole: boolean;
   }>
 >;
 
