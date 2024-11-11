@@ -17,6 +17,9 @@ ENV PATH="$PATH:/emsdk:/emsdk/upstream/emscripten:/emsdk/node/20.18.0_64bit/bin"
 
 RUN cd /emsdk/upstream/emscripten/ && sudo npm install acorn google-closure-compiler
 
+RUN curl -L https://github.com/doxygen/doxygen/releases/download/Release_1_12_0/doxygen-1.12.0.linux.bin.tar.gz | tar -xz && \
+    cd doxygen-1.12.0 && make install
+
 # [Optional] Uncomment if you want to install an additional version of node using nvm
 # ARG EXTRA_NODE_VERSION=10
 # RUN su node -c "source /usr/local/share/nvm/nvm.sh && nvm install ${EXTRA_NODE_VERSION}"

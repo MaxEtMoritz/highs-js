@@ -30,3 +30,7 @@ emcc -O3 \
  -o highs.js \
  -Wl,--whole-archive libhighs_bindings.a HiGHS/lib/libhighs.a \
  -Wl,--no-whole-archive
+
+doxygen ../Doxyfile
+
+node ../transpileDeclarations.mjs highs.d.ts
