@@ -1,34 +1,34 @@
 const MODEL_FILENAME = "m.lp";
 
-Module.Highs_readModel = Module["cwrap"]("Highs_readModel", "number", [
-  "number",
-  "string",
-]);
-const Highs_setIntOptionValue = Module["cwrap"](
-  "Highs_setIntOptionValue",
-  "number",
-  ["number", "string", "number"]
-);
-const Highs_setDoubleOptionValue = Module["cwrap"](
-  "Highs_setDoubleOptionValue",
-  "number",
-  ["number", "string", "number"]
-);
-const Highs_setStringOptionValue = Module["cwrap"](
-  "Highs_setStringOptionValue",
-  "number",
-  ["number", "string", "string"]
-);
-const Highs_setBoolOptionValue = Module["cwrap"](
-  "Highs_setBoolOptionValue",
-  "number",
-  ["number", "string", "number"]
-);
-Module.Highs_writeSolutionPretty = Module["cwrap"](
-  "Highs_writeSolutionPretty",
-  "number",
-  ["number", "string"]
-);
+// Module.Highs_readModel = Module["cwrap"]("Highs_readModel", "number", [
+//   "number",
+//   "string",
+// ]);
+// const Highs_setIntOptionValue = Module["cwrap"](
+//   "Highs_setIntOptionValue",
+//   "number",
+//   ["number", "string", "number"]
+// );
+// const Highs_setDoubleOptionValue = Module["cwrap"](
+//   "Highs_setDoubleOptionValue",
+//   "number",
+//   ["number", "string", "number"]
+// );
+// const Highs_setStringOptionValue = Module["cwrap"](
+//   "Highs_setStringOptionValue",
+//   "number",
+//   ["number", "string", "string"]
+// );
+// const Highs_setBoolOptionValue = Module["cwrap"](
+//   "Highs_setBoolOptionValue",
+//   "number",
+//   ["number", "string", "number"]
+// );
+// Module.Highs_writeSolutionPretty = Module["cwrap"](
+//   "Highs_writeSolutionPretty",
+//   "number",
+//   ["number", "string"]
+// );
 
 const MODEL_STATUS_CODES = /** @type {const} */ ({
   0: "Not Set",
@@ -49,67 +49,55 @@ const MODEL_STATUS_CODES = /** @type {const} */ ({
   15: "Unknown",
 });
 
+/** @type {import("../types").Highs} Module */
+//var Module = Module;
+
 /** @typedef {Object} Highs */
 
-var /** @type {()=>Highs} */ _Highs_create,
-  /** @type {(arg0:Highs)=>void} */ _Highs_run,
-  /** @type {(arg0:Highs)=>void} */ _Highs_destroy,
-  /** @type {(arg0:Highs, arg1:number)=>(keyof (typeof MODEL_STATUS_CODES))} */ _Highs_getModelStatus,
-  /** @type {any}*/ FS;
+var ///** @type {()=>Highs} */ _Highs_create,
+//   /** @type {(arg0:Highs)=>void} */ _Highs_run,
+//   /** @type {(arg0:Highs)=>void} */ _Highs_destroy,
+//   /** @type {(arg0:Highs, arg1:number)=>(keyof (typeof MODEL_STATUS_CODES))} */ _Highs_getModelStatus,
+/** @type {any}*/ FS;
 
 /**
  * Solve a model in the CPLEX LP file format.
  * @param {string} model_str The problem to solve in the .lp format
- * @param {undefined | import("../types").HighsOptions} highs_options Options to pass the solver. See https://github.com/ERGO-Code/HiGHS/blob/v1.8.0/src/lp_data/HighsOptions.h
- * @returns {import("../types").HighsSolution} The solution
+ * @param {undefined | import("../types").HighsOptionsLegacy} highs_options Options to pass the solver. See https://github.com/ERGO-Code/HiGHS/blob/v1.8.0/src/lp_data/HighsOptions.h
+ * @returns {import("../types").HighsSolutionLegacy} The solution
  */
 Module["solve"] = function (model_str, highs_options) {
   FS.writeFile(MODEL_FILENAME, model_str);
-  const highs = _Highs_create();
+  const highs = new Module["Highs"]();
   assert_ok(
-    () => Module.Highs_readModel(highs, MODEL_FILENAME),
+    () => highs["readModel"](MODEL_FILENAME),
     "read LP model (see http://web.mit.edu/lpsolve/doc/CPLEX-format.htm)"
   );
   const options = highs_options || {};
   for (const option_name in options) {
     const option_value = options[option_name];
     const type = typeof option_value;
-    let setoption;
-    if (type === "number") setoption = setNumericOption;
-    else if (type === "boolean") setoption = Highs_setBoolOptionValue;
-    else if (type === "string") setoption = Highs_setStringOptionValue;
-    else
-      throw new Error(
-        `Unsupported option value type ${option_value} for '${option_name}'`
-      );
     assert_ok(
-      () => setoption(highs, option_name, option_value),
+      () => highs["setOptionValue"](option_name, option_value),
       `set option '${option_name}'`
     );
   }
-  assert_ok(() => _Highs_run(highs), "solve the problem");
+  assert_ok(() => highs["run"](), "solve the problem");
   const status =
-    MODEL_STATUS_CODES[_Highs_getModelStatus(highs, 0)] || "Unknown";
+    MODEL_STATUS_CODES[highs["getModelStatus"]().value] || "Unknown";
   // Flush the content of stdout in order to have a clean stream before writing the solution in it
   stdout_lines.length = 0;
   assert_ok(
-    () => Module.Highs_writeSolutionPretty(highs, ""),
+    () => highs["writeSolution"]("", Module["SolutionStyle"]["kSolutionStylePretty"]),
     "write and extract solution"
   );
-  _Highs_destroy(highs);
+  highs.delete();
   const output = parseResult(stdout_lines, status);
   // Flush the content of stdout and stderr because these streams are not used anymore
   stdout_lines.length = 0;
   stderr_lines.length = 0;
   return output;
 };
-
-function setNumericOption(highs, option_name, option_value) {
-  let result = Highs_setDoubleOptionValue(highs, option_name, option_value);
-  if (result === -1 && option_value === (option_value | 0))
-    result = Highs_setIntOptionValue(highs, option_name, option_value);
-  return result;
-}
 
 function parseNum(s) {
   if (s === "inf") return 1 / 0;
@@ -158,8 +146,8 @@ function lineToObj(headers, line) {
 /**
  * Parse HiGHS output lines
  * @param {string[]} lines stdout from highs
- * @param {import("../types").HighsModelStatus} status status
- * @returns {import("../types").HighsSolution} The solution
+ * @param {import("../types").HighsModelStatusLegacy} status status
+ * @returns {import("../types").HighsSolutionLegacy} The solution
  */
 function parseResult(lines, status) {
   if (lines.length < 3)
@@ -213,15 +201,21 @@ function headersForNonEmptyColumns(headerLine, firstDataLine) {
     .map((match) => match[0]);
 }
 
+/**
+ * Throw an exception if a HiGHS call fails (returns a HighsStatus other than kOk and kWarning)
+ * @param {()=>import("../types").HighsStatus} fn function to execute
+ * @param {string} action description of the context in which the error occurred
+ */
 function assert_ok(fn, action) {
   let err;
   try {
-    err = fn();
+    err = fn().value;
   } catch (e) {
     err = e;
   }
   // Allow HighsStatus::kOk (0) and HighsStatus::kWarning (1) but
   // disallow other values, such as e.g. HighsStatus::kError (-1).
-  if (err !== 0 && err !== 1)
+  if (err !== 0 && err !== 1){
     throw new Error("Unable to " + action + ". HiGHS error " + err);
+  }
 }

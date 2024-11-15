@@ -23,10 +23,13 @@ export EMCC_CLOSURE_ARGS="--jscomp_off=checkTypes"
 emcc -O3 \
  -s MODULARIZE=1 \
  -s ALLOW_MEMORY_GROWTH=1 \
- -flto \
+ -sWASM_BIGINT \
+ -flto=thin \
  --closure 1 \
  -lembind \
  --emit-tsd highs.d.ts \
+ --pre-js ../src/pre.js \
+ --post-js ../src/post.js \
  -o highs.js \
  -Wl,--whole-archive libhighs_bindings.a HiGHS/lib/libhighs.a \
  -Wl,--no-whole-archive
