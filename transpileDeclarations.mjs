@@ -1,9 +1,8 @@
-import ts from 'typescript';
+import { Project, ScriptKind, SyntaxKind } from 'ts-morph';
 import { readFile, writeFile } from 'fs/promises';
 import { argv } from 'process';
 import sqlite3 from 'sqlite3';
 const { Database, OPEN_READONLY, OPEN_FULLMUTEX } = sqlite3.verbose();
-import { promisify } from 'util';
 import { resolve } from 'path';
 argv.splice(0, 2);
 console.debug(resolve('sqlite3', 'doxygen_sqlite3.db'), argv);
@@ -45,55 +44,77 @@ const all = (query, params) =>
 // db.on('close', () => console.debug('db closed'));
 // db.on('change', () => console.debug('db changed'));
 
+const project = new Project();
+
 for (const file of argv) {
-  const srcFile = ts.createSourceFile(file, await readFile(file, { encoding: 'utf8' }), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const srcFile = project.addSourceFileAtPath(file);
   const promises = [];
   document(srcFile, promises);
   await Promise.all(promises);
-  const printer = ts.createPrinter();
-  await writeFile(file, printer.printFile(srcFile));
 }
+await project.save();
 db.close();
 
 /**
  * add a docstring to node and recursively to its children.
- * @param {import('typescript').Node} node
+ * @param {import('ts-morph').Node} node
  * @param {Array<Promise>} promiseStorage
  */
 function document(node, promiseStorage) {
   promiseStorage.push(
     (async () => {
-      if (ts.isMethodSignature(node)) {
-        const result = await get(
-          `SELECT memberdef.briefdescription, memberdef.detaileddescription, memberdef.inbodydescription
+      if (node.isKind(SyntaxKind.MethodSignature)) {
+        const parentName = (node.getParentWhileKind(SyntaxKind.TypeLiteral) ?? node).getParent().getName();
+        let result = await all(
+          `SELECT memberdef.rowid, memberdef.briefdescription, memberdef.detaileddescription, memberdef.inbodydescription, memberdef.argsstring, (SELECT count(rowid) FROM memberdef_param WHERE memberdef_id = memberdef.rowid) as paramcount
   FROM memberdef
   JOIN member ON memberdef.rowid = member.memberdef_rowid
   JOIN compounddef ON member.scope_rowid = compounddef.rowid
-  WHERE memberdef.kind = 'function' AND memberdef.name = $membername AND compounddef.name = $parentname`,
-          { $membername: node.name.text, $parentname: node.parent.name.text }
+  WHERE memberdef.kind = 'function' AND memberdef.name = $membername AND compounddef.name = $parentname AND paramcount = $paramcount`,
+          { $membername: node.getName(), $parentname: parentName, $paramcount: node.getParameters().length }
         );
-        if (result && (result.briefdescription || result.detaileddescription || result.inbodydescription)) {
-          let doc = '*\n';
-          if (result.briefdescription) doc += xml2jsdoc(result.briefdescription);
-          if (result.detaileddescription) doc += xml2jsdoc(result.detaileddescription);
-          if (result.inbodydescription) doc += xml2jsdoc(result.inbodydescription);
-          ts.addSyntheticLeadingComment(node, ts.SyntaxKind.MultiLineCommentTrivia, doc.trim() + '\n', true);
+        console.debug(result);
+        if (result.length > 0) {
+          if (result.length > 1) throw new Error('ambiguous function declaration ' + node.getText() + ': possible overrides are ' + result.map(r => `${node.getName()}${r.argsstring}`).join(', '));
+          else result = result[0];
+          const parameters = await all(
+            `SELECT param.type, param.declname
+          FROM param
+          JOIN memberdef_param ON param.rowid = memberdef_param.param_id
+          JOIN memberdef ON memberdef_param.memberdef_id = memberdef.rowid
+          WHERE memberdef.rowid = $rowid
+          ORDER BY param.rowid ASC`,
+            { $rowid: result.rowid }
+          );
+          console.debug(parameters.length, node.getParameters().length);
+          node.getParameters().forEach((p, i) => {
+            p.rename(parameters[i].declname ?? '_' + i);
+          });
+          if (result.briefdescription || result.detaileddescription || result.inbodydescription) {
+            let doc = '';
+            if (result.briefdescription) doc += xml2jsdoc(result.briefdescription);
+            if (result.detaileddescription) doc += xml2jsdoc(result.detaileddescription);
+            if (result.inbodydescription) doc += xml2jsdoc(result.inbodydescription);
+            node.addJsDoc({
+              description: doc.trim()
+            });
+          }
         }
-      } else if (ts.isInterfaceDeclaration(node)) {
+      } else if (node.isKind(SyntaxKind.InterfaceDeclaration)) {
         const result = await get(
           `SELECT briefdescription, detaileddescription
   FROM compounddef
   WHERE kind = 'class' AND name = $membername`,
-          { $membername: node.name.text }
+          { $membername: node.getName() }
         );
         if (result && (result.briefdescription || result.detaileddescription)) {
-          let doc = '*\n';
+          let doc = '';
           if (result.briefdescription) doc += xml2jsdoc(result.briefdescription);
           if (result.detaileddescription) doc += xml2jsdoc(result.detaileddescription);
-          ts.addSyntheticLeadingComment(node, ts.SyntaxKind.MultiLineCommentTrivia, doc.trim() + '\n', true);
+          node.addJsDoc({ description: doc.trim() });
         }
-      } else if (ts.isPropertySignature(node)) {
-        if (!ts.isTypeLiteralNode(node.parent)) {
+      } else if (node.isKind(SyntaxKind.PropertySignature)) {
+        if (!node.getParentIfKind(SyntaxKind.TypeLiteral)) {
           // TODO: need support for type literals?
           const result = await get(
             `SELECT memberdef.briefdescription, memberdef.detaileddescription, memberdef.inbodydescription
@@ -101,21 +122,21 @@ function document(node, promiseStorage) {
   JOIN member ON memberdef.rowid = member.memberdef_rowid
   JOIN compounddef ON member.scope_rowid = compounddef.rowid
   WHERE memberdef.kind = 'function' AND memberdef.name = $membername AND compounddef.name = $parentname`,
-            { $membername: node.name.text, $parentname: node.parent.name.text }
+            { $membername: node.getName(), $parentname: node.getParent().getName() }
           );
           // TODO: can this also be variables in c++, or macro definitions?
           if (result && (result.briefdescription || result.detaileddescription || result.inbodydescription)) {
-            let doc = '*\n';
+            let doc = '';
             if (result.briefdescription) doc += xml2jsdoc(result.briefdescription);
             if (result.detaileddescription) doc += xml2jsdoc(result.detaileddescription);
             if (result.inbodydescription) doc += xml2jsdoc(result.inbodydescription);
-            ts.addSyntheticLeadingComment(node, ts.SyntaxKind.MultiLineCommentTrivia, doc.trim() + '\n', true);
+            node.addJsDoc({ description: doc.trim() });
           }
         }
       }
     })()
   );
-  ts.forEachChild(node, n => document(n, promiseStorage));
+  node.forEachChild(n => document(n, promiseStorage));
 }
 
 /**

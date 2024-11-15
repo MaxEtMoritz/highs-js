@@ -42,10 +42,12 @@
   "devDependencies": {
     "@tsconfig/recommended": "^1.0.1",
     "sqlite3": "^5.1.7",
+    "ts-morph": "^24.0.0",
     "typescript": "^5.6.3"
   },
   "files": [
     "build/highs.js",
+    "build/highs.d.ts",
     "build/highs.wasm",
     "package.json",
     "types.d.ts",
