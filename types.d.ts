@@ -1,8 +1,11 @@
-type Highs = {
-  solve(problem: string, options?: HighsOptions): HighsSolution;
+import * as h from './build/highs';
+export * from './build/highs'
+
+export type Highs = h.MainModule & {
+    solve(problem: string, options?: HighsOptionsLegacy): HighsSolutionLegacy;
 };
 
-type HighsOptions = Readonly<
+export type HighsOptionsLegacy = Readonly<
   Partial<{
     /**
      * @default "choose"
@@ -557,19 +560,19 @@ type HighsOptions = Readonly<
     iis_strategy: IisStrategy;
   }>
 >;
-type HighsSolution =
+export type HighsSolutionLegacy =
   | GenericHighsSolution<true, HighsLinearSolutionColumn, HighsLinearSolutionRow>
   | GenericHighsSolution<false, HighsMixedIntegerLinearSolutionColumn, HighsMixedIntegerLinearSolutionRow>
   | GenericHighsSolution<boolean, HighsInfeasibleSolutionColumn, HighsInfeasibleSolutionRow, 'Infeasible'>;
 
-type GenericHighsSolution<IsLinear extends boolean, ColType, RowType, Status extends HighsModelStatus = HighsModelStatus> = {
+type GenericHighsSolution<IsLinear extends boolean, ColType, RowType, Status extends HighsModelStatusLegacy = HighsModelStatusLegacy> = {
   Status: Status;
   ObjectiveValue: number;
   Columns: Record<string, ColType>;
   Rows: RowType[];
 };
 
-type HighsModelStatus =
+export type HighsModelStatusLegacy =
   | 'Not Set'
   | 'Load error'
   | 'Model error'
@@ -745,5 +748,3 @@ enum IisStrategy {
 
 /** Loads HiGHS */
 export default function highsLoader(options?: HighsLoaderOptions): Promise<Highs>;
-
-// export const Model: unknown
