@@ -29,12 +29,15 @@ jobs:
             ${{ runner.os }}-cmake-
       - uses: mymindstorm/setup-emsdk@v14
         with: { version: "3.1.71" }
+      - run: >
+        curl -L https://github.com/doxygen/doxygen/releases/download/Release_1_12_0/doxygen-1.12.0.linux.bin.tar.gz | tar -xz &&
+        cd doxygen-1.12.0 && make install && cd .. && rm -r doxygen-1.12.0
       - run: npm ci
       - name: build
         run: npm run build
       - name: test
         run: npm test
-      - run: cp build/highs.* demo/
+      - run: cp build/highs.{js,wasm} demo/
       - name: Deploy demo 🚀
         uses: JamesIves/github-pages-deploy-action@v4
         with:
