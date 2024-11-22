@@ -36,4 +36,4 @@ emcc -O3 \
 
 doxygen ../Doxyfile
 
-node ../transpileDeclarations.mjs highs.d.ts
+node ../transpileDeclarations.mjs -m ../cpp2js.conf highs.d.ts

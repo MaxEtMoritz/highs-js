@@ -726,17 +726,17 @@ EMSCRIPTEN_DECLARE_VAL_TYPE(CallbackData)
 HighsStatus highs_setCallback(
     Highs& h,
     Callback /*std::function<void(int, const std::string&, const HighsCallbackDataOut*, HighsCallbackDataIn*, py::handle)>*/ fn,
-    CallbackData data) {
-  if (!data.hasOwnProperty("call")) // TODO: correct way to determine if it's a function?
+    CallbackData user_callback_data) {
+  if (!fn.hasOwnProperty("call")) // TODO: correct way to determine if it's a function?
     return h.setCallback((HighsCallbackFunctionType) nullptr, nullptr);
   else
     return h.setCallback(
-        [fn, data](int callbackType, const std::string& msg,
+        [fn, user_callback_data](int callbackType, const std::string& msg,
                    const HighsCallbackDataOut* dataOut,
                    HighsCallbackDataIn* dataIn, void* d) {
           return fn(callbackType, msg, dataOut, dataIn, emscripten::val(d));
         },
-        data.as_handle());
+        user_callback_data.as_handle());
 }
 
 #pragma endregion
@@ -793,7 +793,7 @@ EMSCRIPTEN_BINDINGS(Highs)
     emscripten::register_type<IntArray>("Array<number>");
     emscripten::register_type<HighsVarTypeArray>("Array<HighsVarType>");
     emscripten::register_type<CallbackData>("any");
-    emscripten::register_type<Callback>("(callbackType: number, msg: string, dataOut: HighsCallbackDataOut, dataIn: HighsCallbackDataIn, any) => void");
+    emscripten::register_type<Callback>("(callbackType: number, msg: string, dataOut: HighsCallbackDataOut, dataIn: HighsCallbackDataIn, user_callback_data: any) => void");
     emscripten::register_type<OptionType>("string | boolean | number");
     // ##TYPES##
     emscripten::register_type<highs_getRangingResult>("[status: HighsStatus, ranging: HighsRanging]");
@@ -1167,8 +1167,8 @@ EMSCRIPTEN_BINDINGS(Highs)
         .function("clearSolver", &Highs::clearSolver)
         .function("passModel", &highs_passModel)
         .function("passModel", &highs_passModelPointers)
-        .function("passModel", &highs_passLp)
-        .function("passModel", &highs_passLpPointers)
+        .function("passLp", &highs_passLp)
+        .function("passLp", &highs_passLpPointers)
         .function("passHessian", &highs_passHessian)
         .function("passHessian", &highs_passHessianPointers)
         .function("passColName", &Highs::passColName)
